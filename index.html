@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ലദൽ മദീന 2K26 - Live Score</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;600;700;800&family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        body { 
+            font-family: 'Anek Malayalam', sans-serif; 
+            background-color: #0f172a; /* Dark Slate */
+            color: #f8fafc; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .num-font { font-family: 'Outfit', sans-serif; }
+        
+        /* App Container for Desktop Viewing (forces mobile width) */
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+            min-height: 100vh;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        
+        /* Hide scrollbar for clean mobile look */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        .tab-btn { transition: all 0.3s ease; }
+        .tab-active { color: #fbbf24; transform: scale(1.1); }
+        .tab-inactive { color: #64748b; }
+
+        .slide-in { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .pulse-border { animation: pulseBorder 2s infinite; }
+        @keyframes pulseBorder {
+            0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-950">
+
+    <div class="app-container flex flex-col">
+        
+        <header class="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 pt-4 pb-3 px-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-pink-600 flex items-center justify-center text-xl shadow-lg font-black text-white">🏆</div>
+                <div>
+                    <h1 class="text-white text-lg leading-tight font-black tracking-tight">ലദൽ മദീന 2K26</h1>
+                    <p class="text-[10px] text-amber-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block"></span> Live Score
+                    </p>
+                </div>
+            </div>
+            <button onclick="window.render()" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 active:scale-90 transition">
+                ↻
+            </button>
+        </header>
+
+        <main id="main-content" class="flex-1 overflow-y-auto pb-24 px-4 pt-4 slide-in">
+            <!-- Dynamic Content Injected Here -->
+            <div class="flex justify-center items-center h-64">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
+            </div>
+        </main>
+
+        <nav class="fixed bottom-0 w-full max-w-[480px] bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 pb-safe z-50">
+            <div class="flex justify-around items-center h-16 px-2">
+                <button onclick="switchTab('home')" id="tab-home" class="tab-btn tab-active flex flex-col items-center justify-center w-16 gap-1">
+                    <span class="text-xl">📊</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider">Scores</span>
+                </button>
+                <button onclick="switchTab('results')" id="tab-results" class="tab-btn tab-inactive flex flex-col items-center justify-center w-16 gap-1 relative">
+                    <span class="text-xl">📋</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider">Results</span>
+                    <span id="new-badge" class="absolute top-0 right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-900 hidden"></span>
+                </button>
+                <button onclick="switchTab('stars')" id="tab-stars" class="tab-btn tab-inactive flex flex-col items-center justify-center w-16 gap-1">
+                    <span class="text-xl">⭐</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider">Top</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCo3S007XNUl1bAfgAlMR1vJyDQBNFf6MI",
+            authDomain: "kottam-eee89.firebaseapp.com",
+            projectId: "kottam-eee89",
+            storageBucket: "kottam-eee89.firebasestorage.app",
+            messagingSenderId: "558082092753",
+            appId: "1:558082092753:web:c0a69f647998061a3adff0"
+        };
+        
+        const appInit = initializeApp(firebaseConfig);
+        const auth = getAuth(appInit);
+        const db = getFirestore(appInit);
+
+        const CATEGORIES = ['Kiddies', 'Sub Junior', 'Junior', 'Senior', 'Super Senior', 'General'];
+
+        let state = {
+            tab: 'home',
+            programs: [],
+            candidates: [],
+            results: [],
+            searchQuery: '',
+            prevResultCount: 0
+        };
+
+        window.state = state;
+
+        const initDB = async () => {
+            try { await signInAnonymously(auth); } catch (e) { console.error("Firebase Login Failed:", e); }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                onSnapshot(doc(db, 'settings', 'config'), (snap) => {
+                    if (snap.exists()) state.programs = snap.data().programs || [];
+                    render();
+                });
+                onSnapshot(collection(db, 'candidates'), (snap) => {
+                    state.candidates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    render();
+                });
+                onSnapshot(collection(db, 'results'), (snap) => {
+                    const newResults = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (state.results.length > 0 && newResults.length > state.results.length) {
+                        // New result published!
+                        document.getElementById('new-badge').classList.remove('hidden');
+                        if(state.tab === 'results') triggerConfetti();
+                    }
+                    state.results = newResults;
+                    render();
+                });
+            }
+        });
+        
+        initDB();
+
+        window.switchTab = (tab) => {
+            state.tab = tab;
+            state.searchQuery = ''; // reset search on tab switch
+            ['home', 'results', 'stars'].forEach(t => {
+                const el = document.getElementById('tab-' + t);
+                if (t === tab) { el.classList.add('tab-active'); el.classList.remove('tab-inactive'); } 
+                else { el.classList.remove('tab-active'); el.classList.add('tab-inactive'); }
+            });
+            
+            if(tab === 'results') document.getElementById('new-badge').classList.add('hidden');
+            
+            const main = document.getElementById('main-content');
+            main.classList.remove('slide-in');
+            void main.offsetWidth; // trigger reflow
+            main.classList.add('slide-in');
+            
+            render();
+        };
+
+        window.updateSearch = (val) => {
+            state.searchQuery = val;
+            render();
+            const searchEl = document.getElementById('mobSearch');
+            if (searchEl) { searchEl.focus(); searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length); }
+        };
+
+        window.triggerConfetti = () => {
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#fbbf24', '#ec4899', '#818cf8'] });
+        };
+
+        window.isGroupProgram = (name, forceIsGroup) => {
+            if (forceIsGroup !== undefined) return forceIsGroup;
+            if (!name) return false;
+            const n = name.toLowerCase();
+            return n.includes('group') || n.includes('burda') || n.includes('burdha') || n.includes('qawwali') || n.includes('mala') || n.includes('mash up') || n.includes('moulid') || n.includes('padappayatt') || n.includes('newspaper') || n.includes('collage');
+        };
+
+        const getProg = (id) => state.programs.find(p => p.id === id);
+        const getCand = (id) => state.candidates.find(c => c.id === id);
+
+        const getNamesString = (ids) => {
+            const arr = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+            if(arr.length === 0) return '-';
+            return arr.map(id => getCand(id)?.name || '-').join(', ');
+        };
+
+        window.render = () => {
+            const main = document.getElementById('main-content');
+            if (state.programs.length === 0 && state.candidates.length === 0) return; // Still loading
+
+            // Calculate Points globally
+            let stats = { aTotal: 0, bTotal: 0, aCats: {}, bCats: {} };
+            let candPoints = {};
+            CATEGORIES.forEach(c => { stats.aCats[c] = 0; stats.bCats[c] = 0; });
+
+            state.results.forEach(res => {
+                const prog = getProg(res.progId);
+                const isGrp = prog ? window.isGroupProgram(prog.name, prog.isGroup) : false;
+                const cat = prog ? prog.cat : 'General';
+                
+                const fPts = res.pts1 || (isGrp ? 10 : 5);
+                const sPts = res.pts2 || (isGrp ? 5 : 3);
+                const tPts = res.pts3 || (isGrp ? 3 : 1);
+
+                const addPts = (ids, pts) => {
+                    const arr = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+                    arr.forEach(id => {
+                        const c = getCand(id);
+                        if (c) {
+                            if (c.team === 'KHAIBAR WARRIORS') { stats.aTotal += pts; stats.aCats[cat] += pts; }
+                            else if (c.team === 'KHANDAQ FIGHTERS') { stats.bTotal += pts; stats.bCats[cat] += pts; }
+                            if (!isGrp) candPoints[c.id] = (candPoints[c.id] || 0) + pts;
+                        }
+                    });
+                };
+                addPts(res.first, fPts); addPts(res.second, sPts); addPts(res.third, tPts);
+            });
+
+            // ---------------- TAB: HOME (SCORES) ----------------
+            if (state.tab === 'home') {
+                const leadTeam = stats.aTotal >= stats.bTotal ? 'Khaibar' : 'Khandaq';
+                
+                let catHtml = '';
+                CATEGORIES.forEach(cat => {
+                    catHtml += `
+                    <div class="glass-card rounded-xl p-3 mb-3 flex items-center justify-between">
+                        <div class="text-sm font-bold text-slate-300 w-1/3">${cat}</div>
+                        <div class="flex gap-2 w-2/3 justify-end">
+                            <div class="bg-pink-900/50 border border-pink-500/30 text-pink-300 rounded px-2 py-1 text-center w-12 text-xs font-bold">${stats.aCats[cat]}</div>
+                            <div class="text-slate-500 text-xs flex items-center">-</div>
+                            <div class="bg-indigo-900/50 border border-indigo-500/30 text-indigo-300 rounded px-2 py-1 text-center w-12 text-xs font-bold">${stats.bCats[cat]}</div>
+                        </div>
+                    </div>`;
+                });
+
+                main.innerHTML = `
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <div class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden ${stats.aTotal >= stats.bTotal ? 'pulse-border border-amber-500' : 'border-pink-500/30'}">
+                            ${stats.aTotal >= stats.bTotal && stats.aTotal > 0 ? '<div class="absolute top-0 w-full bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest py-0.5">Leading</div>' : ''}
+                            <span class="text-[10px] text-pink-400 font-bold uppercase tracking-widest mt-2 mb-1">Khaibar</span>
+                            <span class="text-5xl font-black text-white num-font tracking-tighter">${stats.aTotal}</span>
+                        </div>
+                        <div class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden ${stats.bTotal > stats.aTotal ? 'pulse-border border-amber-500' : 'border-indigo-500/30'}">
+                            ${stats.bTotal > stats.aTotal ? '<div class="absolute top-0 w-full bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest py-0.5">Leading</div>' : ''}
+                            <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mt-2 mb-1">Khandaq</span>
+                            <span class="text-5xl font-black text-white num-font tracking-tighter">${stats.bTotal}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mb-3 px-1">
+                        <h3 class="font-bold text-white text-sm">Category Scores</h3>
+                        <div class="flex gap-4 text-[10px] font-bold uppercase">
+                            <span class="text-pink-400">Khaibar</span>
+                            <span class="text-indigo-400">Khandaq</span>
+                        </div>
+                    </div>
+                    ${catHtml}
+                `;
+            }
+
+            // ---------------- TAB: RESULTS ----------------
+            if (state.tab === 'results') {
+                const searchQ = state.searchQuery.toLowerCase();
+                const sortedResults = [...state.results]
+                    .filter(res => {
+                        if(!searchQ) return true;
+                        const p = getProg(res.progId);
+                        if(!p) return false;
+                        
+                        // Search in program name, no, or candidate names
+                        const matchProg = p.name.toLowerCase().includes(searchQ) || String(p.progNo).includes(searchQ);
+                        const matchCand = getNamesString(res.first).toLowerCase().includes(searchQ) || 
+                                          getNamesString(res.second).toLowerCase().includes(searchQ) || 
+                                          getNamesString(res.third).toLowerCase().includes(searchQ);
+                        return matchProg || matchCand;
+                    })
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                let resList = '';
+                if(sortedResults.length === 0) resList = '<div class="text-center text-slate-500 mt-10 text-sm">ഫലങ്ങൾ ഒന്നും കണ്ടെത്തിയില്ല.</div>';
+                
+                sortedResults.forEach((res, idx) => {
+                    const p = getProg(res.progId);
+                    if(!p) return;
+                    
+                    const isNew = idx === 0 && searchQ === '';
+                    
+                    const buildPos = (ids, icon, colorClass, pts) => {
+                        const names = getNamesString(ids);
+                        if(names === '-') return '';
+                        return `<div class="flex items-start gap-2 bg-slate-800/50 p-2 rounded border border-slate-700/50 mb-1">
+                            <span class="text-lg leading-none">${icon}</span>
+                            <div class="flex-1">
+                                <p class="text-sm font-bold text-white leading-tight mb-0.5">${names}</p>
+                                <span class="text-[9px] font-bold ${colorClass} uppercase bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">+${pts} Pts</span>
+                            </div>
+                        </div>`;
+                    };
+
+                    resList += `
+                    <div class="glass-card rounded-xl p-3 mb-3 relative overflow-hidden ${isNew ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : ''}">
+                        ${isNew ? '<div class="absolute top-0 right-0 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">New</div>' : ''}
+                        
+                        <div class="mb-3 pr-10">
+                            <h4 class="text-amber-400 font-bold text-sm leading-tight">${p.progNo ? `#${p.progNo} ` : ''}${p.name}</h4>
+                            <span class="text-[9px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold uppercase inline-block mt-1">${p.cat}</span>
+                        </div>
+                        
+                        ${buildPos(res.first, '🥇', 'text-yellow-400', res.pts1 || 5)}
+                        ${buildPos(res.second, '🥈', 'text-slate-300', res.pts2 || 3)}
+                        ${buildPos(res.third, '🥉', 'text-amber-600', res.pts3 || 1)}
+                    </div>`;
+                });
+
+                main.innerHTML = `
+                    <div class="sticky top-0 z-10 bg-slate-950 pb-3 mb-1">
+                        <div class="relative">
+                            <input type="text" id="mobSearch" value="${state.searchQuery}" oninput="window.updateSearch(this.value)" placeholder="Search Name, Chest No or Program..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white outline-none focus:border-amber-500 transition shadow-inner">
+                            <span class="absolute left-3 top-3.5 text-slate-400">🔍</span>
+                        </div>
+                    </div>
+                    <div>${resList}</div>
+                `;
+            }
+
+            // ---------------- TAB: TOP SCORERS ----------------
+            if (state.tab === 'stars') {
+                const getTop = (cat, gender) => {
+                    let eligible = state.candidates.filter(c => c.cat === cat && c.gender === gender);
+                    let top = null; let max = 0;
+                    eligible.forEach(c => { if(candPoints[c.id] && candPoints[c.id] > max) { max = candPoints[c.id]; top = c; }});
+                    return top ? { ...top, pts: max } : null;
+                };
+
+                let topList = '';
+                ['Kiddies', 'Sub Junior', 'Junior', 'Senior', 'Super Senior'].forEach(c => {
+                    const tb = getTop(c, 'BOYS');
+                    const tg = getTop(c, 'GIRLS');
+                    
+                    topList += `
+                    <div class="glass-card rounded-xl p-4 mb-4 border-t border-purple-500/30">
+                        <h3 class="text-center font-black text-amber-400 uppercase tracking-widest text-sm mb-3 border-b border-slate-700/50 pb-2">${c}</h3>
+                        
+                        <div class="flex items-center justify-between mb-3 bg-slate-800/40 p-2.5 rounded-lg border border-slate-700">
+                            <div class="flex items-center gap-3">
+                                <div class="text-3xl drop-shadow-md">🤴</div>
+                                <div>
+                                    <p class="text-[9px] text-amber-500 font-black uppercase tracking-widest mb-0.5">Kalaprathiba</p>
+                                    <p class="font-bold text-white text-sm leading-tight">${tb ? tb.name : 'TBA...'}</p>
+                                    <p class="text-[10px] ${tb?.team === 'KHAIBAR WARRIORS' ? 'text-pink-400' : 'text-indigo-400'} font-bold">${tb ? tb.team : ''}</p>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-black text-emerald-400 num-font">${tb ? tb.pts : '-'}</div>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-slate-800/40 p-2.5 rounded-lg border border-slate-700">
+                            <div class="flex items-center gap-3">
+                                <div class="text-3xl drop-shadow-md">👸</div>
+                                <div>
+                                    <p class="text-[9px] text-pink-400 font-black uppercase tracking-widest mb-0.5">Kalathilakam</p>
+                                    <p class="font-bold text-white text-sm leading-tight">${tg ? tg.name : 'TBA...'}</p>
+                                    <p class="text-[10px] ${tg?.team === 'KHAIBAR WARRIORS' ? 'text-pink-400' : 'text-indigo-400'} font-bold">${tg ? tg.team : ''}</p>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-black text-emerald-400 num-font">${tg ? tg.pts : '-'}</div>
+                        </div>
+                    </div>`;
+                });
+
+                main.innerHTML = `
+                    <div class="text-center mb-4">
+                        <h2 class="text-lg font-bold text-white">Top Scorers Board</h2>
+                        <p class="text-xs text-slate-400">Individual Events Only</p>
+                    </div>
+                    ${topList}
+                `;
+            }
+        };
+
+    </script>
+</body>
+</html>
