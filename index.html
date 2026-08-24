@@ -155,7 +155,7 @@
         window.getProgramPoints = (progNo) => {
             const pNo = String(progNo).trim();
             const pts15 = ['551', '552', '553', '501', '502'];
-            const pts10 = ['54', '154', '155', '257', '259', '458', '04', '4', '105', '107', '205', '206', '208', '303', '304', '403'];
+            const pts10 = ['54', '155', '257', '458', '04', '4', '105', '205', '206', '303', '304', '403'];
             
             if (pts15.includes(pNo)) return { p1: 15, p2: 10, p3: 5 };
             if (pts10.includes(pNo)) return { p1: 10, p2: 7, p3: 5 };
