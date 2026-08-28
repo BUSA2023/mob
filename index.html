@@ -13,7 +13,8 @@
         .num-font { font-family: 'Outfit', sans-serif; }
         .app-container { max-width: 480px; margin: 0 auto; background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%); min-height: 100vh; position: relative; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
         .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        ::-webkit-scrollbar { width: 4px; background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         .tab-btn { transition: all 0.3s ease; }
         .tab-active { color: #fbbf24; transform: scale(1.1); }
         .tab-inactive { color: #64748b; }
@@ -121,16 +122,6 @@
 
         window.triggerConfetti = () => { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#fbbf24', '#ec4899', '#818cf8'] }); };
 
-        window.getProgramPoints = (progNo) => {
-            const pNo = String(progNo).trim();
-            const pts15 = ['551', '552', '553', '501', '502'];
-            const pts10 = ['54', '155', '257', '458', '04', '105', '205', '206', '303', '304', '403', '360'];
-            
-            if (pts15.includes(pNo)) return { p1: 15, p2: 10, p3: 5 };
-            if (pts10.includes(pNo)) return { p1: 10, p2: 7, p3: 5 };
-            return { p1: 5, p2: 3, p3: 1 };
-        };
-
         const getProg = (id) => state.programs.find(p => p.id === id);
         const getCand = (id) => state.candidates.find(c => c.id === id);
         const getNamesString = (ids) => {
@@ -139,23 +130,42 @@
             return arr.map(id => getCand(id)?.name || '-').join(', ');
         };
 
+        window.isGroupProgram = (name, forceIsGroup) => {
+            if (forceIsGroup !== undefined) return forceIsGroup === "true" || forceIsGroup === true;
+            if (!name) return false;
+            const n = name.toLowerCase();
+            return n.includes('group') || n.includes('burda') || n.includes('burdha') || n.includes('qawwali') || n.includes('mala') || n.includes('mash up') || n.includes('moulid') || n.includes('padappayatt') || n.includes('newspaper') || n.includes('collage');
+        };
+
         window.render = () => {
             const main = document.getElementById('main-content');
             if (state.programs.length === 0 && state.candidates.length === 0) return; 
 
             let stats = { aTotal: 0, bTotal: 0, aCats: {}, bCats: {} };
             let candPoints = {};
+            let candKalaPrograms = {};
             CATEGORIES.forEach(c => { stats.aCats[c] = 0; stats.bCats[c] = 0; });
+
+            const p15 = ['551', '552', '553', '501', '502'];
+            const p10 = ['54', '155', '257', '458', '04', '105', '205', '206', '303', '304', '403', '360'];
+            const noIndiv = ['107', '208', '154', '259'];
 
             state.results.forEach(res => {
                 const prog = getProg(res.progId);
-                const isGrp = prog ? prog.isGroup : false;
-                const cat = prog ? prog.cat : 'General';
-                const pNo = prog ? String(prog.progNo).trim() : '';
-                const isConv = ['107', '208', '154', '259'].includes(pNo);
+                if (!prog) return;
+
+                const isGrp = window.isGroupProgram(prog.name, prog.isGroup);
+                const cat = prog.cat || 'General';
+                const pNo = String(prog.progNo).trim();
                 
-                const pts = window.getProgramPoints(pNo);
-                const fPts = res.pts1 || pts.p1; const sPts = res.pts2 || pts.p2; const tPts = res.pts3 || pts.p3;
+                let fPts = 5, sPts = 3, tPts = 1;
+                if (p15.includes(pNo)) { fPts = 15; sPts = 10; tPts = 5; }
+                else if (p10.includes(pNo)) { fPts = 10; sPts = 7; tPts = 5; }
+                
+                if (res.pts1) fPts = res.pts1; if (res.pts2) sPts = res.pts2; if (res.pts3) tPts = res.pts3;
+
+                let countsForKala = prog.kalaprathiba;
+                if(countsForKala === undefined) { countsForKala = (!isGrp && !noIndiv.includes(pNo)); }
 
                 const addPts = (ids, ptsValue) => {
                     const arr = Array.isArray(ids) ? ids : (ids ? [ids] : []);
@@ -165,8 +175,11 @@
                             if (c.team === 'KHAIBAR WARRIORS') { stats.aTotal += ptsValue; if(stats.aCats[cat]!==undefined) stats.aCats[cat] += ptsValue; }
                             else if (c.team === 'KHANDAQ FIGHTERS') { stats.bTotal += ptsValue; if(stats.bCats[cat]!==undefined) stats.bCats[cat] += ptsValue; }
                             
-                            // Prevents Group AND Conversation points from affecting Kalaprathiba
-                            if (!isGrp && !isConv) candPoints[c.id] = (candPoints[c.id] || 0) + ptsValue;
+                            if (countsForKala) {
+                                candPoints[c.id] = (candPoints[c.id] || 0) + ptsValue;
+                                if(!candKalaPrograms[c.id]) candKalaPrograms[c.id] = [];
+                                candKalaPrograms[c.id].push({ name: prog.name, no: prog.progNo, pts: ptsValue });
+                            }
                         }
                     });
                 };
@@ -176,13 +189,17 @@
             if (state.tab === 'home') {
                 let catHtml = '';
                 CATEGORIES.forEach(cat => {
+                    let aPts = stats.aCats[cat]; let bPts = stats.bCats[cat];
+                    let aColor = aPts >= bPts && aPts > 0 ? "text-amber-300 font-black border-amber-500/50 bg-amber-900/50" : "text-amber-300/50 border-amber-500/10 bg-amber-900/20";
+                    let bColor = bPts >= aPts && bPts > 0 ? "text-indigo-300 font-black border-indigo-500/50 bg-indigo-900/50" : "text-indigo-300/50 border-indigo-500/10 bg-indigo-900/20";
+                    
                     catHtml += `
-                    <div class="glass-card rounded-xl p-3 mb-3 flex items-center justify-between">
-                        <div class="text-sm font-bold text-slate-300 w-1/3">${cat}</div>
-                        <div class="flex gap-2 w-2/3 justify-end">
-                            <div class="bg-amber-900/50 border border-amber-500/30 text-amber-300 rounded px-2 py-1 text-center w-12 text-xs font-bold">${stats.aCats[cat]}</div>
-                            <div class="text-slate-500 text-xs flex items-center">-</div>
-                            <div class="bg-indigo-900/50 border border-indigo-500/30 text-indigo-300 rounded px-2 py-1 text-center w-12 text-xs font-bold">${stats.bCats[cat]}</div>
+                    <div class="glass-card rounded-xl p-3 mb-3 flex items-center justify-between border-t border-slate-700/50">
+                        <div class="text-xs font-bold text-slate-300 w-1/3 uppercase tracking-wider">${cat}</div>
+                        <div class="flex gap-2 w-2/3 justify-end items-center">
+                            <div class="border rounded px-2 py-1 text-center w-12 text-sm ${aColor}">${aPts}</div>
+                            <div class="text-slate-600 text-[10px] font-bold">VS</div>
+                            <div class="border rounded px-2 py-1 text-center w-12 text-sm ${bColor}">${bPts}</div>
                         </div>
                     </div>`;
                 });
@@ -190,19 +207,19 @@
                 main.innerHTML = `
                     <div class="grid grid-cols-2 gap-3 mb-6">
                         <div class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden ${stats.aTotal >= stats.bTotal && stats.aTotal > 0 ? 'pulse-border border-amber-500' : 'border-amber-500/30'}">
-                            ${stats.aTotal >= stats.bTotal && stats.aTotal > 0 ? '<div class="absolute top-0 w-full bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest py-0.5">Leading</div>' : ''}
+                            ${stats.aTotal >= stats.bTotal && stats.aTotal > 0 ? '<div class="absolute top-0 w-full bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest py-0.5 shadow-md">Leading</div>' : ''}
                             <span class="text-[10px] text-amber-400 font-bold uppercase tracking-widest mt-2 mb-1">Khaibar</span>
                             <span class="text-5xl font-black text-white num-font tracking-tighter">${stats.aTotal}</span>
                         </div>
                         <div class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden ${stats.bTotal > stats.aTotal ? 'pulse-border border-indigo-500' : 'border-indigo-500/30'}">
-                            ${stats.bTotal > stats.aTotal ? '<div class="absolute top-0 w-full bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest py-0.5">Leading</div>' : ''}
+                            ${stats.bTotal > stats.aTotal ? '<div class="absolute top-0 w-full bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest py-0.5 shadow-md">Leading</div>' : ''}
                             <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mt-2 mb-1">Khandaq</span>
                             <span class="text-5xl font-black text-white num-font tracking-tighter">${stats.bTotal}</span>
                         </div>
                     </div>
                     <div class="flex justify-between items-center mb-3 px-1">
                         <h3 class="font-bold text-white text-sm">Category Scores</h3>
-                        <div class="flex gap-4 text-[10px] font-bold uppercase">
+                        <div class="flex gap-6 text-[9px] font-black uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-full border border-slate-800 shadow-inner">
                             <span class="text-amber-400">Khaibar</span>
                             <span class="text-indigo-400">Khandaq</span>
                         </div>
@@ -238,23 +255,21 @@
                             <span class="text-lg leading-none">${icon}</span>
                             <div class="flex-1">
                                 <p class="text-sm font-bold text-white leading-tight mb-0.5">${names}</p>
-                                <span class="text-[9px] font-bold ${colorClass} uppercase bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">+${ptsValue} Pts</span>
+                                <span class="text-[9px] font-bold ${colorClass} uppercase bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 shadow-inner">+${ptsValue} Pts</span>
                             </div>
                         </div>`;
                     };
 
-                    const ptsObj = window.getProgramPoints(p.progNo);
-
                     resList += `
                     <div class="glass-card rounded-xl p-3 mb-3 relative overflow-hidden ${isNew ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : ''}">
-                        ${isNew ? '<div class="absolute top-0 right-0 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">New</div>' : ''}
+                        ${isNew ? '<div class="absolute top-0 right-0 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-widest shadow-md">New</div>' : ''}
                         <div class="mb-3 pr-10">
                             <h4 class="text-amber-400 font-bold text-sm leading-tight">${p.progNo ? `#${p.progNo} ` : ''}${p.name}</h4>
-                            <span class="text-[9px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold uppercase inline-block mt-1">${p.cat}</span>
+                            <span class="text-[9px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold uppercase inline-block mt-1 shadow-inner border border-slate-700">${p.cat}</span>
                         </div>
-                        ${buildPos(res.first, '🥇', 'text-yellow-400', res.pts1 || ptsObj.p1)}
-                        ${buildPos(res.second, '🥈', 'text-slate-300', res.pts2 || ptsObj.p2)}
-                        ${buildPos(res.third, '🥉', 'text-amber-600', res.pts3 || ptsObj.p3)}
+                        ${buildPos(res.first, '🥇', 'text-yellow-400', res.pts1 || 5)}
+                        ${buildPos(res.second, '🥈', 'text-slate-300', res.pts2 || 3)}
+                        ${buildPos(res.third, '🥉', 'text-amber-600', res.pts3 || 1)}
                     </div>`;
                 });
 
@@ -277,33 +292,38 @@
                     return top ? { ...top, pts: max } : null;
                 };
 
+                const renderKalaList = (id) => {
+                    if(!id || !candKalaPrograms[id]) return '<div class="text-[9px] text-slate-500 italic mt-1 text-center py-1">No individual points yet</div>';
+                    return `<div class="mt-2 space-y-1 max-h-24 overflow-y-auto pr-1">` + 
+                        candKalaPrograms[id].map(p => `<div class="text-[9px] text-slate-300 leading-tight flex justify-between bg-slate-800/80 p-1 rounded"><span class="truncate pr-2">${p.no?'#'+p.no+' ':''}${p.name}</span><span class="text-amber-400 font-bold shrink-0">+${p.pts}</span></div>`).join('') + 
+                        `</div>`;
+                };
+
                 let topList = '';
                 ['Kiddies', 'Sub Junior', 'Junior', 'Senior', 'Super Senior'].forEach(c => {
                     const tb = getTop(c, 'BOYS'); const tg = getTop(c, 'GIRLS');
                     topList += `
-                    <div class="glass-card rounded-xl p-4 mb-4 border-t border-purple-500/30">
+                    <div class="glass-card rounded-xl p-4 mb-4 border-t-2 border-amber-500/50">
                         <h3 class="text-center font-black text-amber-400 uppercase tracking-widest text-sm mb-3 border-b border-slate-700/50 pb-2">${c}</h3>
-                        <div class="flex items-center justify-between mb-3 bg-slate-800/40 p-2.5 rounded-lg border border-slate-700">
-                            <div class="flex items-center gap-3">
-                                <div class="text-3xl drop-shadow-md">🤴</div>
-                                <div>
-                                    <p class="text-[9px] text-amber-500 font-black uppercase tracking-widest mb-0.5">Kalaprathiba</p>
-                                    <p class="font-bold text-white text-sm leading-tight">${tb ? tb.name : 'TBA...'}</p>
-                                    <p class="text-[10px] ${tb?.team === 'KHAIBAR WARRIORS' ? 'text-amber-400' : 'text-indigo-400'} font-bold">${tb ? tb.team : ''}</p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700 flex flex-col h-full shadow-inner">
+                                <div class="flex flex-col items-center text-center border-b border-slate-700/50 pb-2 mb-2 flex-1">
+                                    <div class="text-3xl drop-shadow-md mb-1">🤴</div>
+                                    <p class="text-[9px] text-amber-500 font-black uppercase tracking-widest mb-1 bg-amber-900/40 px-2 py-0.5 rounded">Kalaprathiba</p>
+                                    <p class="font-bold text-white text-xs leading-tight mb-1">${tb ? tb.name : 'TBA...'}</p>
+                                    <div class="text-xl font-black text-emerald-400 num-font mt-auto">${tb ? tb.pts : '-'}</div>
                                 </div>
+                                ${renderKalaList(tb?.id)}
                             </div>
-                            <div class="text-2xl font-black text-emerald-400 num-font">${tb ? tb.pts : '-'}</div>
-                        </div>
-                        <div class="flex items-center justify-between bg-slate-800/40 p-2.5 rounded-lg border border-slate-700">
-                            <div class="flex items-center gap-3">
-                                <div class="text-3xl drop-shadow-md">👸</div>
-                                <div>
-                                    <p class="text-[9px] text-pink-400 font-black uppercase tracking-widest mb-0.5">Kalathilakam</p>
-                                    <p class="font-bold text-white text-sm leading-tight">${tg ? tg.name : 'TBA...'}</p>
-                                    <p class="text-[10px] ${tg?.team === 'KHAIBAR WARRIORS' ? 'text-amber-400' : 'text-indigo-400'} font-bold">${tg ? tg.team : ''}</p>
+                            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700 flex flex-col h-full shadow-inner">
+                                <div class="flex flex-col items-center text-center border-b border-slate-700/50 pb-2 mb-2 flex-1">
+                                    <div class="text-3xl drop-shadow-md mb-1">👸</div>
+                                    <p class="text-[9px] text-pink-400 font-black uppercase tracking-widest mb-1 bg-pink-900/40 px-2 py-0.5 rounded">Kalathilakam</p>
+                                    <p class="font-bold text-white text-xs leading-tight mb-1">${tg ? tg.name : 'TBA...'}</p>
+                                    <div class="text-xl font-black text-emerald-400 num-font mt-auto">${tg ? tg.pts : '-'}</div>
                                 </div>
+                                ${renderKalaList(tg?.id)}
                             </div>
-                            <div class="text-2xl font-black text-emerald-400 num-font">${tg ? tg.pts : '-'}</div>
                         </div>
                     </div>`;
                 });
@@ -311,7 +331,7 @@
                 main.innerHTML = `
                     <div class="text-center mb-4">
                         <h2 class="text-lg font-bold text-white">Top Scorers Board</h2>
-                        <p class="text-xs text-slate-400">Individual Events Only</p>
+                        <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Individual Events Only</p>
                     </div>
                     ${topList}
                 `;
